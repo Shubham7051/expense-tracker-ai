@@ -5,30 +5,38 @@ from rest_framework import status
 from .models import Expense
 from .serializers import ExpenseSerializer
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Sum
+from django.db.models.functions import ExtractMonth
+from drf_spectacular.utils import extend_schema
 
 
 class ExpenseListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
-def get(self, request):
+    def get(self, request):
 
-    expenses = Expense.objects.filter(
-        user=request.user
+        expenses = Expense.objects.filter(
+            user=request.user
+        )
+
+        category = request.query_params.get('category')
+
+        date = request.query_params.get('date')
+
+        if category:
+            expenses = expenses.filter(category=category)
+
+        if date:
+            expenses = expenses.filter(date=date)
+
+        serializer = ExpenseSerializer(expenses, many=True)
+
+        return Response(serializer.data)
+    
+    @extend_schema(
+        request=ExpenseSerializer,
+        responses=ExpenseSerializer
     )
-
-    category = request.query_params.get('category')
-
-    date = request.query_params.get('date')
-
-    if category:
-        expenses = expenses.filter(category=category)
-
-    if date:
-        expenses = expenses.filter(date=date)
-
-    serializer = ExpenseSerializer(expenses, many=True)
-
-    return Response(serializer.data)
 
     def post(self, request):
 
@@ -59,6 +67,10 @@ class ExpenseDetailView(APIView):
         serializer = ExpenseSerializer(expense)
         return Response(serializer.data)
 
+    @extend_schema(
+        request=ExpenseSerializer,
+        responses=ExpenseSerializer
+    )
     def put(self,request,pk):
         expense = self.get_object(request,pk)
         if not expense:
@@ -83,6 +95,51 @@ class ExpenseDetailView(APIView):
             {"Message:Expense has been deleted"},
             status=status.HTTP_404_NOT_FOUND
         )
+class ExpenseSummaryView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        expenses = Expense.objects.filter(
+            user=request.user
+        )
+
+        total_expense = expenses.aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+
+        category_summary = expenses.values(
+            'category'
+        ).annotate(
+            total=Sum('amount')
+        )
+
+        return Response(
+            {
+                "total_expense": total_expense,
+                "category_summary": category_summary
+            }
+        )
         
+class MonthlyExpenseSummaryView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        expenses = Expense.objects.filter(
+            user=request.user
+        )
+
+        monthly_summary = expenses.annotate(
+            month=ExtractMonth('date')
+        ).values(
+            'month'
+        ).annotate(
+            total=Sum('amount')
+        ).order_by('month')
+
+        return Response(monthly_summary)
         
     

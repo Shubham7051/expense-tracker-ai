@@ -5,6 +5,7 @@ from .serializers import LoginSerializer
 
 from .serializers import RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import AllowAny
 
 
 class RegisterView(APIView):
@@ -46,7 +47,7 @@ def get_tokens_for_user(user):
     }
 
 class LoginView(APIView):
-
+    permission_classes = [AllowAny]
     def post(self, request):
 
         serializer = LoginSerializer(data=request.data)
